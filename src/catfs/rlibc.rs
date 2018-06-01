@@ -13,6 +13,9 @@ use std::ptr;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::io::RawFd;
 use std::os::unix::fs::FileExt;
+use std::os::raw::c_int;
+use std::os::raw::c_ulong;
+
 
 use self::fuse::FileType;
 use self::time::Timespec;
@@ -90,7 +93,7 @@ pub fn closedir(dir: *mut libc::DIR) -> io::Result<()> {
     }
 }
 
-pub fn seekdir(dir: *mut libc::DIR, loc: i64) {
+pub fn seekdir(dir: *mut libc::DIR, loc: c_int) {
     unsafe {
         libc::seekdir(dir, loc);
     }
@@ -109,7 +112,7 @@ impl Default for Dirent {
                 d_off: 0,
                 d_reclen: 0,
                 d_type: libc::DT_REG,
-                d_name: [0i8; 256], // FIXME: don't hardcode 256
+                d_name: [0_; 256], // FIXME: don't hardcode 256
             },
         };
     }
@@ -133,10 +136,10 @@ fn array_to_osstring(cslice: &[libc::c_char]) -> OsString {
 }
 
 impl Dirent {
-    pub fn ino(&self) -> u64 {
+    pub fn ino(&self) -> c_ulong {
         return self.en.d_ino;
     }
-    pub fn off(&self) -> i64 {
+    pub fn off(&self) -> c_int {
         return self.en.d_off;
     }
     pub fn kind(&self) -> fuse::FileType {
@@ -205,9 +208,9 @@ pub fn pipe() -> io::Result<(libc::c_int, libc::c_int)> {
 
 pub fn splice(
     fd: libc::c_int,
-    off_self: i64,
+    off_self: c_int,
     other: libc::c_int,
-    off_other: i64,
+    off_other: c_int,
     len: usize,
 ) -> io::Result<usize> {
     let mut off_from = off_self;
@@ -350,12 +353,12 @@ pub fn utimensat(
     let s = to_cstring(path);
     let mut times = [
         libc::timespec {
-            tv_sec: atime.sec,
-            tv_nsec: atime.nsec as i64,
+            tv_sec: atime.sec as c_int,
+            tv_nsec: atime.nsec as c_int,
         },
         libc::timespec {
-            tv_sec: mtime.sec,
-            tv_nsec: mtime.nsec as i64,
+            tv_sec: mtime.sec as c_int,
+            tv_nsec: mtime.nsec as c_int,
         },
     ];
 
@@ -443,7 +446,7 @@ impl File {
     }
 
     pub fn truncate(&self, size: usize) -> io::Result<()> {
-        let res = unsafe { libc::ftruncate(self.fd, size as i64) };
+        let res = unsafe { libc::ftruncate(self.fd, size as c_int) };
         if res < 0 {
             return Err(io::Error::last_os_error());
         } else {
@@ -451,8 +454,8 @@ impl File {
         }
     }
 
-    pub fn allocate(&self, offset: u64, len: usize) -> io::Result<()> {
-        let res = unsafe { libc::posix_fallocate(self.fd, offset as i64, len as i64) };
+    pub fn allocate(&self, offset: c_int, len: usize) -> io::Result<()> {
+        let res = unsafe { libc::posix_fallocate(self.fd, offset as c_int, len as c_int) };
         if res == 0 {
             return Ok(());
         } else {
@@ -466,7 +469,7 @@ impl File {
 
         if let Err(e) = self.truncate(size) {
             if size > old_size && e.raw_os_error().unwrap() == libc::EPERM {
-                self.allocate(old_size as u64, size - old_size)?;
+                self.allocate(old_size as c_int, size - old_size)?;
             } else {
                 return Err(RError::from(e));
             }
@@ -484,7 +487,7 @@ impl File {
         }
     }
 
-    pub fn read_at(&self, buf: &mut [u8], offset: i64) -> io::Result<usize> {
+    pub fn read_at(&self, buf: &mut [u8], offset: c_int) -> io::Result<usize> {
         let nbytes =
             unsafe { libc::pread(self.fd, as_mut_void_ptr(buf), buf.len(), offset) };
         if nbytes < 0 {
@@ -494,7 +497,7 @@ impl File {
         }
     }
 
-    pub fn write_at(&self, buf: &[u8], offset: i64) -> io::Result<usize> {
+    pub fn write_at(&self, buf: &[u8], offset: c_int) -> io::Result<usize> {
         let nbytes = unsafe { libc::pwrite(self.fd, as_void_ptr(buf), buf.len(), offset) };
         if nbytes < 0 {
             return Err(io::Error::last_os_error());
@@ -576,11 +579,11 @@ impl Drop for File {
 
 impl FileExt for File {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
-        File::read_at(self, buf, offset as i64)
+        File::read_at(self, buf, offset as c_int)
     }
 
     fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
-        File::write_at(self, buf, offset as i64)
+        File::write_at(self, buf, offset as c_int)
     }
 }
 

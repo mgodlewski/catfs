@@ -16,6 +16,8 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::RawFd;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockWriteGuard};
 use std::path::{Path, PathBuf};
+use std::os::raw::c_ulong;
+use std::os::raw::c_int;
 
 use self::threadpool::ThreadPool;
 
@@ -192,11 +194,11 @@ impl CatFS {
         match rlibc::fstatvfs(self.cache_dir) {
             Ok(st) => {
                 reply.statfs(
-                    st.f_blocks,
-                    st.f_bfree,
-                    st.f_bavail,
-                    st.f_files,
-                    st.f_ffree,
+                    (st.f_blocks as c_ulong).into(),
+                    (st.f_bfree as c_ulong).into(),
+                    (st.f_bavail as c_ulong).into(),
+                    (st.f_files as c_ulong).into(),
+                    (st.f_ffree as c_ulong).into(),
                     st.f_bsize as u32,
                     st.f_namemax as u32,
                     st.f_frsize as u32,
@@ -531,13 +533,14 @@ impl CatFS {
     pub fn readdir(&mut self, _ino: u64, dh: u64, offset: i64, mut reply: ReplyDirectory) {
         let mut dh_store = self.dh_store.lock().unwrap();
         let dir = dh_store.handles.get_mut(&dh).unwrap();
-        dir.seekdir(offset);
+        let _offset = offset as c_int;
+        dir.seekdir(_offset);
         loop {
             match dir.readdir() {
                 Ok(res) => {
                     match res {
                         Some(entry) => {
-                            if reply.add(entry.ino(), entry.off(), entry.kind(), entry.name()) {
+                            if reply.add(entry.ino().into(), entry.off().into(), entry.kind(), entry.name()) {
                                 dir.push(entry);
                                 break;
                             } else {
@@ -602,7 +605,8 @@ impl CatFS {
         let mut buf: Vec<u8> = Vec::with_capacity(size as usize);
         buf.resize(size as usize, 0u8);
         let mut file = file.lock().unwrap();
-        match file.read(offset, &mut buf) {
+        let mut _offset = offset as c_int;
+        match file.read(_offset, &mut buf) {
             Ok(nread) => {
                 reply.data(&buf[..nread]);
             }
@@ -658,7 +662,7 @@ impl CatFS {
         &mut self,
         ino: u64,
         fh: u64,
-        offset: i64,
+        offset: c_int,
         data: Vec<u8>,
         _flags: u32,
         reply: ReplyWrite,

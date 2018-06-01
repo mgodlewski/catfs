@@ -9,6 +9,8 @@ use self::time::Timespec;
 
 use std::ffi::OsStr;
 use std::ops::Deref;
+use std::os::raw::c_int;
+//use std::os::raw::c_ulong;
 
 use catfs::CatFS;
 
@@ -87,8 +89,9 @@ impl Filesystem for PCatFS {
     ) {
         let mut s = make_self(self);
         let data = data.to_vec();
+        let _offset = offset as c_int;
         self.tp.execute(move || {
-            s.fs.write(ino, fh, offset, data, _flags, reply);
+            s.fs.write(ino, fh, _offset, data, _flags, reply);
         });
     }
 

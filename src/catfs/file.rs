@@ -10,6 +10,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::RawFd;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Condvar, Mutex};
+use std::os::raw::c_int;
 
 use self::generic_array::GenericArray;
 use self::generic_array::typenum::U64;
@@ -26,7 +27,7 @@ type CvData<T> = Arc<(Mutex<T>, Condvar)>;
 
 #[derive(Default)]
 struct PageInInfo {
-    offset: i64,
+    offset: c_int,
     dirty: bool,
     eof: bool,
     err: Option<RError<io::Error>>,
@@ -345,18 +346,18 @@ impl Handle {
         return Ok(false);
     }
 
-    pub fn read(&mut self, offset: i64, buf: &mut [u8]) -> error::Result<usize> {
+    pub fn read(&mut self, offset: c_int, buf: &mut [u8]) -> error::Result<usize> {
         let nwant = buf.len();
         let mut bytes_read: usize = 0;
 
         if self.has_page_in_thread {
-            self.wait_for_offset(offset + (buf.len() as i64), false)?;
+            self.wait_for_offset(offset + (buf.len() as c_int), false)?;
         }
 
         while bytes_read < nwant {
             match self.cache_file.read_at(
                 &mut buf[bytes_read..],
-                offset + (bytes_read as i64),
+                offset + (bytes_read as c_int),
             ) {
                 Ok(nread) => {
                     if nread == 0 {
@@ -398,7 +399,7 @@ impl Handle {
         return Ok(());
     }
 
-    pub fn write(&mut self, offset: i64, buf: &[u8]) -> error::Result<usize> {
+    pub fn write(&mut self, offset: c_int, buf: &[u8]) -> error::Result<usize> {
         let nwant = buf.len();
         let mut bytes_written: usize = 0;
 
@@ -409,14 +410,14 @@ impl Handle {
         }
 
         if self.has_page_in_thread {
-            self.wait_for_offset(offset + (buf.len() as i64), true)?;
+            self.wait_for_offset(offset + (buf.len() as c_int), true)?;
         }
 
         while bytes_written < nwant {
             if !self.write_through_failed {
                 if let Err(e) = self.src_file.write_at(
                     &buf[bytes_written..],
-                    offset + (bytes_written as i64),
+                    offset + (bytes_written as c_int),
                 )
                 {
                     if e.raw_os_error().unwrap() == libc::ENOTSUP {
@@ -434,7 +435,7 @@ impl Handle {
 
             match self.cache_file.write_at(
                 &buf[bytes_written..],
-                offset + (bytes_written as i64),
+                offset + (bytes_written as c_int),
             ) {
                 Ok(nwritten) => {
                     bytes_written += nwritten;
@@ -516,7 +517,7 @@ impl Handle {
         }
     }
 
-    fn wait_for_offset(&mut self, offset: i64, set_dirty: bool) -> error::Result<()> {
+    fn wait_for_offset(&mut self, offset: c_int, set_dirty: bool) -> error::Result<()> {
         let &(ref lock, ref cvar) = &*self.page_in_res;
 
         let mut page_in_res = lock.lock().unwrap();
@@ -540,7 +541,7 @@ impl Handle {
         }
     }
 
-    fn notify_offset(&self, res: error::Result<i64>, eof: bool) -> error::Result<()> {
+    fn notify_offset(&self, res: error::Result<c_int>, eof: bool) -> error::Result<()> {
         let &(ref lock, ref cvar) = &*self.page_in_res;
 
         let mut page_in_res = lock.lock().unwrap();
@@ -599,7 +600,7 @@ impl Handle {
         return Ok(());
     }
 
-    fn copy_user(&self, rh: &File, wh: &File) -> error::Result<i64> {
+    fn copy_user(&self, rh: &File, wh: &File) -> error::Result<c_int> {
         let mut buf = [0u8; 32 * 1024];
         let mut offset = 0;
         loop {
@@ -608,7 +609,7 @@ impl Handle {
                 break;
             }
             wh.write_at(&buf[..nread], offset)?;
-            offset += nread as i64;
+            offset += nread as c_int;
 
             self.notify_offset(Ok(offset), false)?;
         }
@@ -616,22 +617,23 @@ impl Handle {
         return Ok(offset);
     }
 
-    fn copy_splice(&self, rh: &File, wh: &File) -> error::Result<i64> {
+    fn copy_splice(&self, rh: &File, wh: &File) -> error::Result<c_int> {
         let (pin, pout) = rlibc::pipe()?;
 
-        let mut offset = 0;
+        let mut offset : c_int;
+        offset = 0;
         loop {
-            let nread = rlibc::splice(rh.as_raw_fd(), offset, pout, -1, 128 * 1024)?;
+            let nread = rlibc::splice(rh.as_raw_fd(), offset.into(), pout, -1, 128 * 1024)?;
             if nread == 0 {
                 break;
             }
 
             let mut written = 0;
             while written < nread {
-                let nxfer = rlibc::splice(pin, -1, wh.as_raw_fd(), offset, 128 * 1024)?;
+                let nxfer = rlibc::splice(pin, -1, wh.as_raw_fd(), offset.into(), 128 * 1024)?;
 
                 written += nxfer;
-                offset += nxfer as i64;
+                offset += nxfer as c_int;
 
                 self.notify_offset(Ok(offset), false)?;
             }
@@ -663,7 +665,7 @@ impl Handle {
             wh.truncate(size)?;
         }
 
-        let offset: i64;
+        let offset: c_int;
 
         if disable_splice {
             offset = self.copy_user(rh, wh)?;

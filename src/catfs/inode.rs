@@ -109,23 +109,23 @@ impl Inode {
     pub fn lookup_path(dir: RawFd, path: &AsRef<Path>) -> io::Result<fuse::FileAttr> {
         let st = rlibc::fstatat(dir, path)?;
         let attr = fuse::FileAttr {
-            ino: st.st_ino,
+            ino: st.st_ino as u64,
             size: st.st_size as u64,
             blocks: st.st_blocks as u64,
             atime: Timespec {
-                sec: st.st_atime,
+                sec: st.st_atime as i64,
                 nsec: st.st_atime_nsec as i32,
             },
             mtime: Timespec {
-                sec: st.st_mtime,
+                sec: st.st_mtime as i64,
                 nsec: st.st_mtime_nsec as i32,
             },
             ctime: Timespec {
-                sec: st.st_ctime,
+                sec: st.st_ctime as i64,
                 nsec: st.st_ctime_nsec as i32,
             },
             crtime: Timespec {
-                sec: st.st_ctime,
+                sec: st.st_ctime as i64,
                 nsec: st.st_ctime_nsec as i32,
             },
             kind: to_filetype(st.st_mode),
