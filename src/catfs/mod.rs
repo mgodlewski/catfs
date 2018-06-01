@@ -16,8 +16,6 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::RawFd;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockWriteGuard};
 use std::path::{Path, PathBuf};
-use std::os::raw::c_ulong;
-use std::os::raw::c_int;
 
 use self::threadpool::ThreadPool;
 
@@ -533,7 +531,7 @@ impl CatFS {
     pub fn readdir(&mut self, _ino: u64, dh: u64, offset: i64, mut reply: ReplyDirectory) {
         let mut dh_store = self.dh_store.lock().unwrap();
         let dir = dh_store.handles.get_mut(&dh).unwrap();
-        let _offset = offset as c_int;
+        let _offset = offset as libc::c_int;
         dir.seekdir(_offset);
         loop {
             match dir.readdir() {
@@ -605,7 +603,7 @@ impl CatFS {
         let mut buf: Vec<u8> = Vec::with_capacity(size as usize);
         buf.resize(size as usize, 0u8);
         let mut file = file.lock().unwrap();
-        let mut _offset = offset as c_int;
+        let mut _offset = offset as libc::c_int;
         match file.read(_offset, &mut buf) {
             Ok(nread) => {
                 reply.data(&buf[..nread]);
@@ -662,7 +660,7 @@ impl CatFS {
         &mut self,
         ino: u64,
         fh: u64,
-        offset: c_int,
+        offset: libc::c_int,
         data: Vec<u8>,
         _flags: u32,
         reply: ReplyWrite,

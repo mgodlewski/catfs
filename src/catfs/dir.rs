@@ -4,14 +4,13 @@ use std::fs;
 use std::io;
 use std::os::unix::io::RawFd;
 use std::path::Path;
-use std::os::raw::c_int;
 
 use catfs::error;
 use catfs::rlibc;
 
 pub struct Handle {
     dh: *mut libc::DIR,
-    offset: c_int,
+    offset: libc::c_int,
     entry: rlibc::Dirent,
     entry_valid: bool,
 }
@@ -61,7 +60,7 @@ impl Handle {
         });
     }
 
-    pub fn seekdir(&mut self, offset: c_int) {
+    pub fn seekdir(&mut self, offset: libc::c_int) {
         if offset != self.offset {
             debug!(
                 "seeking {} to {}",

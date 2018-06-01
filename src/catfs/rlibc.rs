@@ -13,8 +13,6 @@ use std::ptr;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::io::RawFd;
 use std::os::unix::fs::FileExt;
-use std::os::raw::c_int;
-use std::os::raw::c_ulong;
 
 
 use self::fuse::FileType;
@@ -93,7 +91,7 @@ pub fn closedir(dir: *mut libc::DIR) -> io::Result<()> {
     }
 }
 
-pub fn seekdir(dir: *mut libc::DIR, loc: c_int) {
+pub fn seekdir(dir: *mut libc::DIR, loc: libc::c_int) {
     unsafe {
         libc::seekdir(dir, loc);
     }
@@ -139,7 +137,7 @@ impl Dirent {
     pub fn ino(&self) -> c_ulong {
         return self.en.d_ino;
     }
-    pub fn off(&self) -> c_int {
+    pub fn off(&self) -> libc::c_int {
         return self.en.d_off;
     }
     pub fn kind(&self) -> fuse::FileType {
@@ -208,9 +206,9 @@ pub fn pipe() -> io::Result<(libc::c_int, libc::c_int)> {
 
 pub fn splice(
     fd: libc::c_int,
-    off_self: c_int,
+    off_self: libc::c_int,
     other: libc::c_int,
-    off_other: c_int,
+    off_other: libc::c_int,
     len: usize,
 ) -> io::Result<usize> {
     let mut off_from = off_self;
@@ -353,12 +351,12 @@ pub fn utimensat(
     let s = to_cstring(path);
     let mut times = [
         libc::timespec {
-            tv_sec: atime.sec as c_int,
-            tv_nsec: atime.nsec as c_int,
+            tv_sec: atime.sec as libc::c_int,
+            tv_nsec: atime.nsec as libc::c_int,
         },
         libc::timespec {
-            tv_sec: mtime.sec as c_int,
-            tv_nsec: mtime.nsec as c_int,
+            tv_sec: mtime.sec as libc::c_int,
+            tv_nsec: mtime.nsec as libc::c_int,
         },
     ];
 
@@ -446,7 +444,7 @@ impl File {
     }
 
     pub fn truncate(&self, size: usize) -> io::Result<()> {
-        let res = unsafe { libc::ftruncate(self.fd, size as c_int) };
+        let res = unsafe { libc::ftruncate(self.fd, size as libc::c_int) };
         if res < 0 {
             return Err(io::Error::last_os_error());
         } else {
@@ -454,8 +452,8 @@ impl File {
         }
     }
 
-    pub fn allocate(&self, offset: c_int, len: usize) -> io::Result<()> {
-        let res = unsafe { libc::posix_fallocate(self.fd, offset as c_int, len as c_int) };
+    pub fn allocate(&self, offset: libc::c_int, len: usize) -> io::Result<()> {
+        let res = unsafe { libc::posix_fallocate(self.fd, offset as libc::c_int, len as libc::c_int) };
         if res == 0 {
             return Ok(());
         } else {
@@ -469,7 +467,7 @@ impl File {
 
         if let Err(e) = self.truncate(size) {
             if size > old_size && e.raw_os_error().unwrap() == libc::EPERM {
-                self.allocate(old_size as c_int, size - old_size)?;
+                self.allocate(old_size as libc::c_int, size - old_size)?;
             } else {
                 return Err(RError::from(e));
             }
@@ -487,7 +485,7 @@ impl File {
         }
     }
 
-    pub fn read_at(&self, buf: &mut [u8], offset: c_int) -> io::Result<usize> {
+    pub fn read_at(&self, buf: &mut [u8], offset: libc::c_int) -> io::Result<usize> {
         let nbytes =
             unsafe { libc::pread(self.fd, as_mut_void_ptr(buf), buf.len(), offset) };
         if nbytes < 0 {
@@ -497,7 +495,7 @@ impl File {
         }
     }
 
-    pub fn write_at(&self, buf: &[u8], offset: c_int) -> io::Result<usize> {
+    pub fn write_at(&self, buf: &[u8], offset: libc::c_int) -> io::Result<usize> {
         let nbytes = unsafe { libc::pwrite(self.fd, as_void_ptr(buf), buf.len(), offset) };
         if nbytes < 0 {
             return Err(io::Error::last_os_error());
@@ -579,11 +577,11 @@ impl Drop for File {
 
 impl FileExt for File {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> io::Result<usize> {
-        File::read_at(self, buf, offset as c_int)
+        File::read_at(self, buf, offset as libc::c_int)
     }
 
     fn write_at(&self, buf: &[u8], offset: u64) -> io::Result<usize> {
-        File::write_at(self, buf, offset as c_int)
+        File::write_at(self, buf, offset as libc::c_int)
     }
 }
 
